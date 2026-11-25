@@ -164,6 +164,8 @@ interface SeerrClient {
 
     suspend fun deleteRequest(requestId: Long): NetworkResult<Unit>
 
+    suspend fun getRequest(requestId: Long): NetworkResult<MediaRequest>
+
     suspend fun deleteMediaFile(
         mediaId: Long,
         is4k: Boolean,
@@ -382,6 +384,8 @@ class SeerrClientImpl(
     )
 
     override suspend fun deleteRequest(requestId: Long): NetworkResult<Unit> = delete("request/$requestId")
+
+    override suspend fun getRequest(requestId: Long): NetworkResult<MediaRequest> = get("request/$requestId")
 
     override suspend fun deleteMediaFile(
         mediaId: Long,

@@ -140,6 +140,7 @@ class UnifiedMediaDetailsSeerrHandler(
                 onSuccessRefresh()
             }.onError { code, message, cause ->
                 _requestStatus.value = OperationStatus.Error(code, message, cause)
+                onSuccessRefresh() // show Seerr's real state after a refused or unclear decision
             }
         }
     }
@@ -179,6 +180,7 @@ class UnifiedMediaDetailsSeerrHandler(
                     onSuccessRefresh()
                 }.onError { code, message, cause ->
                     _requestStatus.value = OperationStatus.Error(code, message, cause)
+                    onSuccessRefresh() // show Seerr's real state
                 }
         }
     }

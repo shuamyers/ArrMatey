@@ -11,8 +11,11 @@ import com.dnfapps.arrmatey.mediaserver.model.MediaServerIntegration
 import com.dnfapps.arrmatey.utils.getNetworkUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
@@ -24,7 +27,9 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 private const val HEADER_X_API_KEY = "X-Api-Key"
@@ -61,7 +66,14 @@ internal fun HttpClientConfig<*>.configureInstanceClient(
     }
 
     install(HttpRequestRetry) {
-        retryOnExceptionOrServerErrors(maxRetries = 3)
+        // Only reads are retried. Writes (approve, decline, delete, …) are never resent automatically:
+        // a resend after a lost answer could repeat an action the server already performed.
+        retryIf(maxRetries = 3) { request, response ->
+            request.method.isRetryableRead() && response.status.value in 500..599
+        }
+        retryOnExceptionIf(maxRetries = 3) { request, cause ->
+            request.method.isRetryableRead() && cause !is CancellationException && !cause.isTimeout()
+        }
         exponentialDelay()
     }
 
@@ -224,3 +236,9 @@ open class HttpClientFactory(
         }
     }
 }
+
+private fun HttpMethod.isRetryableRead(): Boolean = this == HttpMethod.Get || this == HttpMethod.Head
+
+// Matches Ktor's own default, which does not retry timeouts.
+private fun Throwable.isTimeout(): Boolean =
+    this is HttpRequestTimeoutException || this is ConnectTimeoutException || this is SocketTimeoutException

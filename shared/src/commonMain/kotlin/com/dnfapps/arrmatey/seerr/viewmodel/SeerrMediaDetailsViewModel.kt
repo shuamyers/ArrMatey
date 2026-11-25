@@ -32,6 +32,7 @@ import com.dnfapps.arrmatey.seerr.usecase.GetSeerrTvRatingsUseCase
 import com.dnfapps.arrmatey.seerr.usecase.SetRequestApprovalStatusUseCase
 import com.dnfapps.arrmatey.seerr.usecase.SubmitIssueUseCase
 import com.dnfapps.arrmatey.seerr.usecase.SubmitRequestUseCase
+import com.dnfapps.networking.onError
 import com.dnfapps.networking.onSuccess
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -286,6 +287,7 @@ class SeerrMediaDetailsViewModel(
                 languageProfileId = languageProfileId,
                 seasons = seasons,
             ).onSuccess { refreshDetails() }
+                .onError { _, _, _ -> refreshDetails() }
         }
     }
 
@@ -294,6 +296,7 @@ class SeerrMediaDetailsViewModel(
         viewModelScope.launch {
             setRequestApprovalStatusUseCase(requestId, ApprovalStatus.Decline, repository)
                 .onSuccess { refreshDetails() }
+                .onError { _, _, _ -> refreshDetails() }
         }
     }
 

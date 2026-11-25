@@ -311,6 +311,7 @@ class RequestsViewModel(
                 refresh()
             }.onError { code, message, cause ->
                 _requestActionStatus.value = OperationStatus.Error(code, message, cause)
+                refresh() // show Seerr's real state, e.g. after "Already declined"
             }
         }
     }
@@ -325,6 +326,7 @@ class RequestsViewModel(
                     refresh()
                 }.onError { code, message, cause ->
                     _requestActionStatus.value = OperationStatus.Error(code, message, cause)
+                    refresh() // show Seerr's real state
                 }
         }
     }

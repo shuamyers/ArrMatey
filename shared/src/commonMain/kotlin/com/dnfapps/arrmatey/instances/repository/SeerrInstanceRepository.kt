@@ -39,11 +39,14 @@ import com.dnfapps.arrmatey.seerr.policy.SeerrPermissionPolicy
 import com.dnfapps.arrmatey.seerr.service.MediaIssuePackageService
 import com.dnfapps.arrmatey.seerr.service.MediaRequestPackageService
 import com.dnfapps.arrmatey.seerr.state.RequestOperationsState
+import com.dnfapps.arrmatey.seerr.usecase.decideSeerrRequest
+import com.dnfapps.networking.ErrorType
 import com.dnfapps.networking.NetworkResult
 import com.dnfapps.networking.asSuccess
 import com.dnfapps.networking.onError
 import com.dnfapps.networking.onSuccess
 import io.ktor.client.HttpClient
+import kotlin.time.Clock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -54,9 +57,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Clock
 
 class SeerrInstanceRepository(
     override var instance: Instance,
@@ -404,10 +408,19 @@ class SeerrInstanceRepository(
         languageProfileId: Long? = null,
         seasons: List<Int>? = null,
     ): NetworkResult<MediaRequest> {
-        updateOperationsState(requestId, status, OperationStatus.InProgress)
-        return client
-            .setRequestStatus(requestId, status, profileId, rootFolder, languageProfileId, seasons)
-            .onSuccess {
+        // One decision per request at a time: a second tap while one is in flight is not sent.
+        val claimed = decisionLock.withLock { decisionsInFlight.add(requestId) }
+        if (!claimed) {
+            return NetworkResult.Error(message = "This request is already being updated", errorType = ErrorType.Unexpected)
+        }
+        try {
+            updateOperationsState(requestId, status, OperationStatus.InProgress)
+            return decideSeerrRequest(
+                requestId = requestId,
+                status = status,
+                send = { client.setRequestStatus(requestId, status, profileId, rootFolder, languageProfileId, seasons) },
+                fetch = { client.getRequest(it) },
+            ).onSuccess {
                 updateOperationsState(requestId, status, OperationStatus.Success())
                 delay(500)
                 updateOperationsState(requestId, status, OperationStatus.Idle)
@@ -416,7 +429,13 @@ class SeerrInstanceRepository(
                 delay(2000)
                 updateOperationsState(requestId, status, OperationStatus.Idle)
             }
+        } finally {
+            decisionLock.withLock { decisionsInFlight.remove(requestId) }
+        }
     }
+
+    private val decisionLock = Mutex()
+    private val decisionsInFlight = mutableSetOf<Long>()
 
     suspend fun deleteRequest(requestId: Long): NetworkResult<Unit> {
         updateOperationsState(requestId, ApprovalStatus.Decline, OperationStatus.InProgress)
