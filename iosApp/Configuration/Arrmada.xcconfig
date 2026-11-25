@@ -1,0 +1,13 @@
+// Arrmada app-target settings (base configuration of the iosApp target).
+// Public defaults only. Personal identity (team, bundle id, signing style) goes in
+// Local.xcconfig next to this file, which is git-ignored. See Local.xcconfig.example.
+
+INFOPLIST_KEY_CFBundleDisplayName = Arrmada
+PRODUCT_BUNDLE_IDENTIFIER = com.owenlejeune.arrmatey
+PRODUCT_BUNDLE_IDENTIFIER[config=Debug] = com.owenlejeune.arrmatey.dev
+DEVELOPMENT_TEAM =
+
+// No CODE_SIGN_ENTITLEMENTS: Access Wi-Fi Information is not available to free Apple
+// accounts, so this fork ships without it (home-Wi-Fi address switching is disabled).
+
+#include? "Local.xcconfig"

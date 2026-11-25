@@ -131,3 +131,6 @@ skills-lock.json
 
 .vscode/
 .vscode/*
+
+# Arrmada: personal signing identity
+iosApp/Configuration/Local.xcconfig
