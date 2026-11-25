@@ -142,6 +142,17 @@ class QBittorrentLoginProtectionTest {
         }
     }
 
+    @Test
+    fun malformedAddressReturnsAnErrorBeforeLogin() = runTest {
+        val engine = MockEngine { error("No network call expected") }
+        httpClient(engine).use { http ->
+            val malformed = draft.copy(url = "https://qbittorrent.test:not-a-port")
+            val result = QBittorrentClient(malformed, http).testConnection()
+            assertEquals("Invalid qBittorrent address.", assertIs<NetworkResult.Error>(result).message)
+            assertEquals(0, engine.requestHistory.size)
+        }
+    }
+
     private fun httpClient(engine: MockEngine) = HttpClient(engine) {
         expectSuccess = true
         defaultRequest { url("https://qbittorrent.test/mounted/") }

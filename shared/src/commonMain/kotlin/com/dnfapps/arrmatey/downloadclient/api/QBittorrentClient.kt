@@ -23,6 +23,7 @@ import io.ktor.http.Parameters
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.appendPathSegments
+import io.ktor.http.parseUrl
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -209,11 +210,8 @@ class QBittorrentClient internal constructor(
             return NetworkResult.Success(Unit)
         }
 
-        val endpoint = try {
-            Url(downloadClient.getEffectiveBaseUrl())
-        } catch (_: IllegalArgumentException) {
-            return NetworkResult.Error(message = "Invalid qBittorrent address.")
-        }
+        val endpoint = parseUrl(downloadClient.getEffectiveBaseUrl())
+            ?: return NetworkResult.Error(message = "Invalid qBittorrent address.")
         val attempt: suspend () -> NetworkResult<Unit> = {
             if (authenticatedEndpoint == endpoint) {
                 NetworkResult.Success(Unit)
