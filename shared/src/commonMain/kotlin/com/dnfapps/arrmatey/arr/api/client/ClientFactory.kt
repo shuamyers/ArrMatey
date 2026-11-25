@@ -240,5 +240,4 @@ open class HttpClientFactory(
 private fun HttpMethod.isRetryableRead(): Boolean = this == HttpMethod.Get || this == HttpMethod.Head
 
 // Matches Ktor's own default, which does not retry timeouts.
-private fun Throwable.isTimeout(): Boolean =
-    this is HttpRequestTimeoutException || this is ConnectTimeoutException || this is SocketTimeoutException
+private fun Throwable.isTimeout(): Boolean = this is HttpRequestTimeoutException || this is ConnectTimeoutException || this is SocketTimeoutException

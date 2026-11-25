@@ -46,7 +46,6 @@ import com.dnfapps.networking.asSuccess
 import com.dnfapps.networking.onError
 import com.dnfapps.networking.onSuccess
 import io.ktor.client.HttpClient
-import kotlin.time.Clock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +60,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 
 class SeerrInstanceRepository(
     override var instance: Instance,

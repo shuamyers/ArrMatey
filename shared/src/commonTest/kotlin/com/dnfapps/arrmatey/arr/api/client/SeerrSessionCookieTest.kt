@@ -7,15 +7,15 @@ import com.dnfapps.arrmatey.instances.model.SeerrAuthType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.http.Cookie
 import io.ktor.http.CookieEncoding
 import io.ktor.http.HttpHeaders
-import io.ktor.http.Url
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json

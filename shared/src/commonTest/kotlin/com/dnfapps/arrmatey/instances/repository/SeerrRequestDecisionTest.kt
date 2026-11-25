@@ -75,8 +75,7 @@ class SeerrRequestDecisionTest {
             jsonHeaders,
         )
 
-        private fun MockRequestHandleScope.conflict() =
-            respond("""{"message":"Only pending requests can be approved or declined."}""", HttpStatusCode.Conflict, jsonHeaders)
+        private fun MockRequestHandleScope.conflict() = respond("""{"message":"Only pending requests can be approved or declined."}""", HttpStatusCode.Conflict, jsonHeaders)
     }
 
     private val instance = Instance(
