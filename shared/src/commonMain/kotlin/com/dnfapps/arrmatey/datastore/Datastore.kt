@@ -14,6 +14,7 @@ fun createDataStore(producePath: () -> String): DataStore<Preferences> = Prefere
 
 internal const val DATA_STORE_FILE_NAME = "arrmatey.preferences_pb"
 internal const val SERVICE_RATE_LIMIT_FILE_NAME = "arrmatey.service_rate_limits.preferences_pb"
+internal const val QBITTORRENT_REFUSALS_FILE_NAME = "arrmatey.qbittorrent_refusals.preferences_pb"
 
 internal fun instanceDataStoreFileName(id: Long) = "arrmatey.instance_$id.preferences_pb"
 
@@ -23,6 +24,8 @@ expect class DataStoreFactory() {
     fun provideDataStore(): DataStore<Preferences>
 
     fun provideServiceRateLimitDataStore(): DataStore<Preferences>
+
+    fun provideQBittorrentRefusalsDataStore(): DataStore<Preferences>
 
     fun provideInstanceDataStore(instanceId: Long): DataStore<Preferences>
 

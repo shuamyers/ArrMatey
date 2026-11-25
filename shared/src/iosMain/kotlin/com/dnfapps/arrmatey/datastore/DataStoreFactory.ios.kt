@@ -13,6 +13,8 @@ actual class DataStoreFactory {
 
     actual fun provideServiceRateLimitDataStore() = createDataStore { documentPath(SERVICE_RATE_LIMIT_FILE_NAME) }
 
+    actual fun provideQBittorrentRefusalsDataStore() = createDataStore { documentPath(QBITTORRENT_REFUSALS_FILE_NAME) }
+
     actual fun provideInstanceDataStore(instanceId: Long) = createDataStore { documentPath(instanceDataStoreFileName(instanceId)) }
 
     actual fun providePlatformDataStore() = createDataStore { documentPath("ios_$DATA_STORE_FILE_NAME") }

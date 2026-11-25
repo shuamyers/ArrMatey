@@ -5,6 +5,7 @@ import com.dnfapps.arrmatey.downloadclient.api.DelugeClient
 import com.dnfapps.arrmatey.downloadclient.api.DownloadClientApi
 import com.dnfapps.arrmatey.downloadclient.api.NzbgetClient
 import com.dnfapps.arrmatey.downloadclient.api.QBittorrentClient
+import com.dnfapps.arrmatey.downloadclient.api.QBittorrentLoginProtection
 import com.dnfapps.arrmatey.downloadclient.api.RTorrentClient
 import com.dnfapps.arrmatey.downloadclient.api.SABnzbdClient
 import com.dnfapps.arrmatey.downloadclient.api.TransmissionClient
@@ -20,10 +21,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class DownloadClientManager(
+class DownloadClientManager internal constructor(
     private val downloadClientRepository: DownloadClientRepository,
     private val httpClientFactory: HttpClientFactory,
+    private val qBittorrentLoginProtection: QBittorrentLoginProtection?,
 ) {
+    constructor(repository: DownloadClientRepository, factory: HttpClientFactory) : this(repository, factory, null)
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val _downloadClientApis = MutableStateFlow<Map<Long, DownloadClientApi>>(emptyMap())
@@ -139,7 +143,7 @@ class DownloadClientManager(
     private fun createApi(downloadClient: DownloadClient): DownloadClientApi {
         val httpClient = httpClientFactory.createDownloadClient(downloadClient)
         return when (downloadClient.type) {
-            DownloadClientType.QBittorrent -> QBittorrentClient(downloadClient, httpClient)
+            DownloadClientType.QBittorrent -> QBittorrentClient(downloadClient, httpClient, qBittorrentLoginProtection)
             DownloadClientType.SABnzbd -> SABnzbdClient(downloadClient, httpClient)
             DownloadClientType.Deluge -> DelugeClient(downloadClient, httpClient)
             DownloadClientType.Transmission -> TransmissionClient(downloadClient, httpClient)

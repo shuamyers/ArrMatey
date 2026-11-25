@@ -20,6 +20,10 @@ actual class DataStoreFactory : KoinComponent {
         context.filesDir.resolve(SERVICE_RATE_LIMIT_FILE_NAME).absolutePath
     }
 
+    actual fun provideQBittorrentRefusalsDataStore() = createDataStore {
+        context.filesDir.resolve(QBITTORRENT_REFUSALS_FILE_NAME).absolutePath
+    }
+
     actual fun provideInstanceDataStore(instanceId: Long) = createDataStore(
         producePath = {
             context.filesDir.resolve(instanceDataStoreFileName(instanceId)).absolutePath

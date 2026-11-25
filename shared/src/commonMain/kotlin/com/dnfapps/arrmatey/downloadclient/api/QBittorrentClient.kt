@@ -9,7 +9,6 @@ import com.dnfapps.arrmatey.downloadclient.model.DownloadClientSystemOverview
 import com.dnfapps.arrmatey.downloadclient.model.DownloadItem
 import com.dnfapps.arrmatey.downloadclient.model.DownloadItemStatus
 import com.dnfapps.arrmatey.downloadclient.model.DownloadTransferInfo
-import com.dnfapps.networking.ErrorType
 import com.dnfapps.networking.NetworkResult
 import com.dnfapps.networking.asSuccess
 import com.dnfapps.networking.safeCall
@@ -21,15 +20,21 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Parameters
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.http.appendPathSegments
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class QBittorrentClient(
+class QBittorrentClient internal constructor(
     private val downloadClient: DownloadClient,
     private val httpClient: HttpClient,
+    private val loginProtection: QBittorrentLoginProtection?,
 ) : DownloadClientApi {
+    constructor(downloadClient: DownloadClient, httpClient: HttpClient) : this(downloadClient, httpClient, null)
+
     private val authMutex = Mutex()
-    private var authenticated: Boolean = false
+    private var authenticatedEndpoint: Url? = null
     private var authFailure: NetworkResult.Error? = null
 
     override suspend fun testConnection(): NetworkResult<Unit> = authenticatedCall {
@@ -194,23 +199,38 @@ class QBittorrentClient(
 
     private suspend fun ensureAuthenticated(): NetworkResult<Unit> {
         authFailure?.let { return it }
-        if (authenticated) return NetworkResult.Success(Unit)
-
         // API-key auth is stateless via Authorization: Bearer; /auth/login rejects keys and repeated failures IP-ban.
         if (downloadClient.apiKey.value.isNotEmpty()) {
-            authenticated = true
             return NetworkResult.Success(Unit)
         }
 
         // Nothing to log in with; rely on WebUI subnet whitelist / disabled auth.
         if (downloadClient.username.value.isEmpty() && downloadClient.password.value.isEmpty()) {
-            authenticated = true
             return NetworkResult.Success(Unit)
         }
 
+        val endpoint = try {
+            Url(downloadClient.getEffectiveBaseUrl())
+        } catch (_: IllegalArgumentException) {
+            return NetworkResult.Error(message = "Invalid qBittorrent address.")
+        }
+        val attempt: suspend () -> NetworkResult<Unit> = {
+            if (authenticatedEndpoint == endpoint) {
+                NetworkResult.Success(Unit)
+            } else {
+                logInWithPassword(endpoint)
+            }
+        }
+        val result = loginProtection?.authenticate(downloadClient, endpoint, attempt) ?: attempt()
+        if (result is NetworkResult.Error && result.isAuthFailure()) authFailure = result
+        return result
+    }
+
+    private suspend fun logInWithPassword(endpoint: Url): NetworkResult<Unit> {
+        val loginUrl = URLBuilder(endpoint).appendPathSegments("api", "v2", "auth", "login").buildString()
         val loginResult =
             httpClient.safeCall {
-                post("api/v2/auth/login") {
+                post(loginUrl) {
                     setBody(
                         FormDataContent(
                             Parameters.build {
@@ -225,20 +245,12 @@ class QBittorrentClient(
         return when (loginResult) {
             is NetworkResult.Success -> {
                 // qBittorrent can reject credentials with HTTP 200 and the response body "Fails.".
-                if (loginResult.data != "Ok.") {
-                    return NetworkResult.Error(
-                        code = 401,
-                        message = "qBittorrent refused the login. Check the credentials in settings.",
-                        errorType = ErrorType.Http,
-                    ).also { authFailure = it }
-                }
-                authenticated = true
+                if (loginResult.data == "Fails.") return qBittorrentLoginRefused()
+                if (loginResult.data != "Ok.") return NetworkResult.Error(message = "Unexpected reply from qBittorrent's login endpoint.")
+                authenticatedEndpoint = endpoint
                 NetworkResult.Success(Unit)
             }
-            is NetworkResult.Error -> {
-                if (loginResult.isAuthFailure()) authFailure = loginResult
-                loginResult
-            }
+            is NetworkResult.Error -> loginResult
             is NetworkResult.Loading -> loginResult
         }
     }

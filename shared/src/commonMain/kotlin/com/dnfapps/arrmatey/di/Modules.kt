@@ -99,6 +99,7 @@ import com.dnfapps.arrmatey.datastore.PreferencesStore
 import com.dnfapps.arrmatey.discover.usecase.GlobalSearchUseCase
 import com.dnfapps.arrmatey.discover.viewmodel.DiscoverViewModel
 import com.dnfapps.arrmatey.discover.viewmodel.UnifiedSearchViewModel
+import com.dnfapps.arrmatey.downloadclient.api.QBittorrentLoginProtection
 import com.dnfapps.arrmatey.downloadclient.repository.DownloadClientManager
 import com.dnfapps.arrmatey.downloadclient.repository.DownloadClientRepository
 import com.dnfapps.arrmatey.downloadclient.service.DownloadQueueService
@@ -308,7 +309,7 @@ val repositoryModule =
         single { InstanceManager(get(), get(), get(), get(), get()) }
 
         single { DownloadClientRepository(get()) }
-        single { DownloadClientManager(get(), get()) }
+        single { DownloadClientManager(get(), get(), QBittorrentLoginProtection(get<DataStoreFactory>().provideQBittorrentRefusalsDataStore())) }
 
         single { MediaServerManager(get(), get()) }
 
