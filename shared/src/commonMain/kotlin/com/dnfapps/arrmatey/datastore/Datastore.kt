@@ -13,6 +13,7 @@ fun createDataStore(producePath: () -> String): DataStore<Preferences> = Prefere
 }
 
 internal const val DATA_STORE_FILE_NAME = "arrmatey.preferences_pb"
+internal const val SERVICE_RATE_LIMIT_FILE_NAME = "arrmatey.service_rate_limits.preferences_pb"
 
 internal fun instanceDataStoreFileName(id: Long) = "arrmatey.instance_$id.preferences_pb"
 
@@ -20,6 +21,8 @@ expect class DataStoreFactory() {
     val defaultAppColor: AppColor
 
     fun provideDataStore(): DataStore<Preferences>
+
+    fun provideServiceRateLimitDataStore(): DataStore<Preferences>
 
     fun provideInstanceDataStore(instanceId: Long): DataStore<Preferences>
 

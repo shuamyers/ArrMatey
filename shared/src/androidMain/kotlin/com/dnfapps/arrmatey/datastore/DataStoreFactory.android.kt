@@ -16,6 +16,10 @@ actual class DataStoreFactory : KoinComponent {
         producePath = { context.filesDir.resolve(DATA_STORE_FILE_NAME).absolutePath },
     )
 
+    actual fun provideServiceRateLimitDataStore() = createDataStore {
+        context.filesDir.resolve(SERVICE_RATE_LIMIT_FILE_NAME).absolutePath
+    }
+
     actual fun provideInstanceDataStore(instanceId: Long) = createDataStore(
         producePath = {
             context.filesDir.resolve(instanceDataStoreFileName(instanceId)).absolutePath

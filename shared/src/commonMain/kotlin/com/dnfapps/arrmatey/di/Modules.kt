@@ -286,7 +286,7 @@ val networkModule =
 
         single<Logger> { DynamicLogger(get(), get()) }
 
-        single { HttpClientFactory(get(), get()) }
+        single { HttpClientFactory(get(), get(), get<DataStoreFactory>().provideServiceRateLimitDataStore()) }
         single { GenericClient(get()) }
 
         single<TransportEncryptor> { AesTransportEncryptor() }

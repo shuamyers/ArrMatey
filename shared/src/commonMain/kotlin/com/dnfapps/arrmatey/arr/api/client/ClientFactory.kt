@@ -1,5 +1,7 @@
 package com.dnfapps.arrmatey.arr.api.client
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import com.dnfapps.arrmatey.arr.api.client.logging.DynamicLogger
 import com.dnfapps.arrmatey.downloadclient.model.DownloadClient
 import com.dnfapps.arrmatey.downloadclient.model.DownloadClientType
@@ -9,6 +11,7 @@ import com.dnfapps.arrmatey.instances.model.InstanceType
 import com.dnfapps.arrmatey.instances.model.SeerrAuthType
 import com.dnfapps.arrmatey.mediaserver.model.MediaServerIntegration
 import com.dnfapps.arrmatey.utils.getNetworkUtils
+import com.dnfapps.networking.HttpRateLimitException
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.network.sockets.ConnectTimeoutException
@@ -34,19 +37,15 @@ import kotlinx.serialization.json.Json
 private const val HEADER_X_API_KEY = "X-Api-Key"
 const val DEFAULT_SLOW_TIMEOUT = 300
 
-fun createInstanceClient(
-    instance: Instance?,
-    json: Json,
-    customLogger: Logger,
-) = HttpClient { configureInstanceClient(instance, json, customLogger) }
-
 /** Instance client setup, split out so tests can apply it to a mock engine. */
 internal fun HttpClientConfig<*>.configureInstanceClient(
     instance: Instance?,
     json: Json,
     customLogger: Logger,
+    serviceRateLimit: ServiceRateLimit? = null,
 ) {
     expectSuccess = true
+    enforceServiceRateLimits(serviceRateLimit)
     install(ContentNegotiation) {
         json(json)
     }
@@ -71,7 +70,7 @@ internal fun HttpClientConfig<*>.configureInstanceClient(
             request.method.isRetryableRead() && response.status.value in 500..599
         }
         retryOnExceptionIf(maxRetries = 3) { request, cause ->
-            request.method.isRetryableRead() && cause !is CancellationException && !cause.isTimeout()
+            request.method.isRetryableRead() && cause !is CancellationException && cause !is HttpRateLimitException && !cause.isTimeout()
         }
         exponentialDelay()
     }
@@ -133,11 +132,15 @@ internal fun HttpClientConfig<*>.configureInstanceClient(
 open class HttpClientFactory(
     private val json: Json,
     private val logger: Logger,
+    rateLimitPreferences: DataStore<Preferences>? = null,
 ) {
-    open fun create(instance: Instance): HttpClient = createInstanceClient(instance, json, logger)
+    private val serviceRateLimit = rateLimitPreferences?.let(::ServiceRateLimit)
+
+    open fun create(instance: Instance): HttpClient = configuredInstanceClient(instance)
 
     fun createDownloadClient(downloadClient: DownloadClient): HttpClient = HttpClient {
         expectSuccess = true
+        enforceServiceRateLimits(serviceRateLimit)
         install(ContentNegotiation) {
             json(json)
         }
@@ -193,10 +196,11 @@ open class HttpClientFactory(
         }
     }
 
-    open fun createGeneric(): HttpClient = createInstanceClient(null, json, logger)
+    open fun createGeneric(): HttpClient = configuredInstanceClient(null)
 
     open fun createMediaServerClient(integration: MediaServerIntegration): HttpClient = HttpClient {
         expectSuccess = true
+        enforceServiceRateLimits(serviceRateLimit)
         install(ContentNegotiation) {
             json(json)
         }
@@ -224,6 +228,10 @@ open class HttpClientFactory(
                 }
             }
         }
+    }
+
+    private fun configuredInstanceClient(instance: Instance?): HttpClient = HttpClient {
+        configureInstanceClient(instance, json, logger, serviceRateLimit)
     }
 }
 

@@ -9,45 +9,22 @@ import platform.Foundation.NSUserDomainMask
 actual class DataStoreFactory {
     actual val defaultAppColor: AppColor = AppColor.ArrMatey
 
-    actual fun provideDataStore() = createDataStore(
-        producePath = {
-            val documentDirectory: NSURL? =
-                NSFileManager.defaultManager.URLForDirectory(
-                    directory = NSDocumentDirectory,
-                    inDomain = NSUserDomainMask,
-                    appropriateForURL = null,
-                    create = false,
-                    error = null,
-                )
-            requireNotNull(documentDirectory).path + "/$DATA_STORE_FILE_NAME"
-        },
-    )
+    actual fun provideDataStore() = createDataStore { documentPath(DATA_STORE_FILE_NAME) }
 
-    actual fun provideInstanceDataStore(instanceId: Long) = createDataStore(
-        producePath = {
-            val documentDirectory: NSURL? =
-                NSFileManager.defaultManager.URLForDirectory(
-                    directory = NSDocumentDirectory,
-                    inDomain = NSUserDomainMask,
-                    appropriateForURL = null,
-                    create = false,
-                    error = null,
-                )
-            requireNotNull(documentDirectory).path + "/${instanceDataStoreFileName(instanceId)}"
-        },
-    )
+    actual fun provideServiceRateLimitDataStore() = createDataStore { documentPath(SERVICE_RATE_LIMIT_FILE_NAME) }
 
-    actual fun providePlatformDataStore() = createDataStore(
-        producePath = {
-            val documentDirectory: NSURL? =
-                NSFileManager.defaultManager.URLForDirectory(
-                    directory = NSDocumentDirectory,
-                    inDomain = NSUserDomainMask,
-                    appropriateForURL = null,
-                    create = false,
-                    error = null,
-                )
-            requireNotNull(documentDirectory).path + "/ios_$DATA_STORE_FILE_NAME"
-        },
-    )
+    actual fun provideInstanceDataStore(instanceId: Long) = createDataStore { documentPath(instanceDataStoreFileName(instanceId)) }
+
+    actual fun providePlatformDataStore() = createDataStore { documentPath("ios_$DATA_STORE_FILE_NAME") }
+
+    private fun documentPath(file: String): String {
+        val directory: NSURL? = NSFileManager.defaultManager.URLForDirectory(
+            directory = NSDocumentDirectory,
+            inDomain = NSUserDomainMask,
+            appropriateForURL = null,
+            create = false,
+            error = null,
+        )
+        return requireNotNull(directory).path + "/$file"
+    }
 }

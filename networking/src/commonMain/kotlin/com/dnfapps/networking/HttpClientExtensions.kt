@@ -15,6 +15,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -67,6 +68,8 @@ suspend inline fun <reified T> HttpClient.safeCall(crossinline block: suspend Ht
     try {
         val data = block(this@safeCall)
         NetworkResult.Success(data)
+    } catch (e: HttpRateLimitException) {
+        NetworkResult.Error(code = HttpStatusCode.TooManyRequests.value, message = e.message, errorType = ErrorType.Http)
     } catch (e: ClientRequestException) {
         // 4xx
         val status = e.response.status
