@@ -13,7 +13,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.network.sockets.SocketTimeoutException
-import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
@@ -146,15 +145,6 @@ open class HttpClientFactory(
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             socketTimeoutMillis = 30_000
-        }
-
-        install(HttpRequestRetry) {
-            // Never retry 4xx: repeated failed auth triggers qBittorrent's IP ban.
-            retryOnServerErrors(maxRetries = 3)
-            retryOnExceptionIf(maxRetries = 3) { _, cause ->
-                cause !is ClientRequestException
-            }
-            exponentialDelay()
         }
 
         install(HttpCookies) {

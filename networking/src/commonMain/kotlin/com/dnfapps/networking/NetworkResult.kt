@@ -12,24 +12,25 @@ sealed class NetworkResult<out T> {
         val message: String? = null,
         val cause: Throwable? = null,
         val errorType: ErrorType = ErrorType.Unexpected,
+        val retryAfter: String? = null,
     ) : NetworkResult<Nothing>()
 
     fun <R> map(transform: (T) -> R): NetworkResult<R> = when (this) {
         is Loading -> Loading
-        is Error -> Error(code, message, cause, errorType)
+        is Error -> this
         is Success -> Success(transform(data))
     }
 }
 
 fun <T, R> NetworkResult<List<T>>.mapValues(transform: (T) -> R): NetworkResult<List<R>> = when (this) {
     is NetworkResult.Loading -> NetworkResult.Loading
-    is NetworkResult.Error -> NetworkResult.Error(code, message, cause, errorType)
+    is NetworkResult.Error -> this
     is NetworkResult.Success -> NetworkResult.Success(data = data.map(transform))
 }
 
 fun <T> NetworkResult<List<T>>.filterValues(predicate: (T) -> Boolean): NetworkResult<List<T>> = when (this) {
     is NetworkResult.Loading -> NetworkResult.Loading
-    is NetworkResult.Error -> NetworkResult.Error(code, message, cause, errorType)
+    is NetworkResult.Error -> this
     is NetworkResult.Success -> NetworkResult.Success(data = data.filter(predicate))
 }
 

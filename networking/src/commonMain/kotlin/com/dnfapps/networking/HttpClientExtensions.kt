@@ -6,7 +6,6 @@ import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
-import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.onDownload
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.delete
@@ -15,6 +14,7 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -84,15 +84,21 @@ suspend inline fun <reified T> HttpClient.safeCall(crossinline block: suspend Ht
         } else {
             status.description
         }
-        NetworkResult.Error(code = status.value, message = errorMessage, errorType = ErrorType.Http)
-    } catch (e: ServerResponseException) {
-        // 5xx
-        val status = e.response.status
-        NetworkResult.Error(code = status.value, message = status.description, errorType = ErrorType.Http)
+        NetworkResult.Error(
+            code = status.value,
+            message = errorMessage,
+            errorType = ErrorType.Http,
+            retryAfter = e.response.headers[HttpHeaders.RetryAfter],
+        )
     } catch (e: ResponseException) {
         // Any other non‑2xx mapped by Ktor into ResponseException
         val status = e.response.status
-        NetworkResult.Error(code = status.value, message = status.description, errorType = ErrorType.Http)
+        NetworkResult.Error(
+            code = status.value,
+            message = status.description,
+            errorType = ErrorType.Http,
+            retryAfter = e.response.headers[HttpHeaders.RetryAfter],
+        )
     } catch (e: ConnectTimeoutException) {
         NetworkResult.Error(message = "Request timed out", cause = e, errorType = ErrorType.Timeout)
     } catch (e: HttpRequestTimeoutException) {

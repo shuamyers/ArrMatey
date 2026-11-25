@@ -9,7 +9,9 @@ import com.dnfapps.arrmatey.downloadclient.model.DownloadClientSystemOverview
 import com.dnfapps.arrmatey.downloadclient.model.DownloadItem
 import com.dnfapps.arrmatey.downloadclient.model.DownloadItemStatus
 import com.dnfapps.arrmatey.downloadclient.model.DownloadTransferInfo
+import com.dnfapps.networking.ErrorType
 import com.dnfapps.networking.NetworkResult
+import com.dnfapps.networking.asSuccess
 import com.dnfapps.networking.safeCall
 import com.dnfapps.networking.safeGet
 import io.ktor.client.HttpClient
@@ -17,24 +19,24 @@ import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Parameters
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class QBittorrentClient(
     private val downloadClient: DownloadClient,
     private val httpClient: HttpClient,
 ) : DownloadClientApi {
+    private val authMutex = Mutex()
     private var authenticated: Boolean = false
+    private var authFailure: NetworkResult.Error? = null
 
-    override suspend fun testConnection(): NetworkResult<Unit> {
-        // Probe a real endpoint: /auth/login is unused with API keys and can pass even when data calls are rejected.
-        return when (val authResult = ensureAuthenticated()) {
-            is NetworkResult.Success -> {
-                httpClient.safeCall<Unit> {
-                    get("api/v2/app/version")
-                }
-            }
-            is NetworkResult.Error -> authResult
-            is NetworkResult.Loading -> NetworkResult.Loading
+    override suspend fun testConnection(): NetworkResult<Unit> = authenticatedCall {
+        // Probe a real endpoint, including for API keys and unauthenticated WebUI access.
+        httpClient.safeCall {
+            get("api/v2/app/version")
+            Unit
         }
     }
 
@@ -96,6 +98,7 @@ class QBittorrentClient(
                     )
                 }
                 is NetworkResult.Error -> {
+                    if (syncResult.isAuthFailure() || syncResult.code == 429) return@authenticatedCall syncResult
                     httpClient
                         .safeGet<QBittorrentTransferInfoResponse>("api/v2/transfer/info")
                         .map { info ->
@@ -122,18 +125,23 @@ class QBittorrentClient(
     }
 
     override suspend fun getSystemOverview(): NetworkResult<DownloadClientSystemOverview> = authenticatedCall {
-        val version = (httpClient.safeGet<String>("api/v2/app/version") as? NetworkResult.Success)?.data?.trim()
-        val webApiVersion = (httpClient.safeGet<String>("api/v2/app/webapiVersion") as? NetworkResult.Success)?.data?.trim()
-        val defaultSavePath = (httpClient.safeGet<String>("api/v2/app/defaultSavePath") as? NetworkResult.Success)?.data?.trim()
+        val version = httpClient.safeGet<String>("api/v2/app/version")
+        version.asAccessError()?.let { return@authenticatedCall it }
+        val webApiVersion = httpClient.safeGet<String>("api/v2/app/webapiVersion")
+        webApiVersion.asAccessError()?.let { return@authenticatedCall it }
+        val defaultSavePath = httpClient.safeGet<String>("api/v2/app/defaultSavePath")
+        defaultSavePath.asAccessError()?.let { return@authenticatedCall it }
         val syncResult = getSyncMetadata()
+        syncResult.asAccessError()?.let { return@authenticatedCall it }
         val serverState = (syncResult as? NetworkResult.Success)?.data?.serverState
 
         val downloadsResult = getDownloads()
+        downloadsResult.asAccessError()?.let { return@authenticatedCall it }
         val downloads = (downloadsResult as? NetworkResult.Success)?.data.orEmpty()
         val activeCount = downloads.count { it.status == DownloadItemStatus.Downloading }
 
         val freeSpace = serverState?.freeSpaceOnDisk ?: 0L
-        val diskPath = defaultSavePath?.takeIf { it.isNotBlank() }
+        val diskPath = defaultSavePath.asSuccess()?.data?.trim()?.takeIf { it.isNotBlank() }
         val diskSpaces = if (freeSpace > 0L) {
             listOf(
                 ArrDiskSpace(
@@ -156,8 +164,8 @@ class QBittorrentClient(
 
         NetworkResult.Success(
             DownloadClientSystemOverview(
-                version = version,
-                webApiVersion = webApiVersion,
+                version = version.asSuccess()?.data?.trim(),
+                webApiVersion = webApiVersion.asSuccess()?.data?.trim(),
                 downloadDir = diskPath,
                 diskSpaces = diskSpaces,
                 connectionStatus = serverState?.connectionStatus?.takeIf { it.isNotBlank() },
@@ -171,26 +179,21 @@ class QBittorrentClient(
         )
     }
 
-    // Re-login and retry once on 401/403 so an expired session cookie recovers automatically.
     private suspend fun <T> authenticatedCall(block: suspend () -> NetworkResult<T>): NetworkResult<T> {
-        when (val auth = ensureAuthenticated()) {
+        when (val auth = authMutex.withLock { ensureAuthenticated() }) {
             is NetworkResult.Error -> return auth
             is NetworkResult.Loading -> return NetworkResult.Loading
             is NetworkResult.Success -> Unit
         }
-        val first = block()
-        if (first is NetworkResult.Error && (first.code == 401 || first.code == 403)) {
-            authenticated = false
-            when (val reAuth = ensureAuthenticated()) {
-                is NetworkResult.Error -> return reAuth
-                is NetworkResult.Loading -> return NetworkResult.Loading
-                is NetworkResult.Success -> return block()
-            }
+        val result = block()
+        if (result is NetworkResult.Error && result.isAuthFailure()) {
+            authMutex.withLock { authFailure = result }
         }
-        return first
+        return result
     }
 
     private suspend fun ensureAuthenticated(): NetworkResult<Unit> {
+        authFailure?.let { return it }
         if (authenticated) return NetworkResult.Success(Unit)
 
         // API-key auth is stateless via Authorization: Bearer; /auth/login rejects keys and repeated failures IP-ban.
@@ -216,22 +219,33 @@ class QBittorrentClient(
                             },
                         ),
                     )
-                }
-                Unit
+                }.bodyAsText().trim()
             }
 
         return when (loginResult) {
             is NetworkResult.Success -> {
+                // qBittorrent can reject credentials with HTTP 200 and the response body "Fails.".
+                if (loginResult.data != "Ok.") {
+                    return NetworkResult.Error(
+                        code = 401,
+                        message = "qBittorrent refused the login. Check the credentials in settings.",
+                        errorType = ErrorType.Http,
+                    ).also { authFailure = it }
+                }
                 authenticated = true
                 NetworkResult.Success(Unit)
             }
             is NetworkResult.Error -> {
-                authenticated = false
+                if (loginResult.isAuthFailure()) authFailure = loginResult
                 loginResult
             }
             is NetworkResult.Loading -> loginResult
         }
     }
+
+    private fun NetworkResult.Error.isAuthFailure(): Boolean = code == 401 || code == 403
+
+    private fun NetworkResult<*>.asAccessError(): NetworkResult.Error? = (this as? NetworkResult.Error)?.takeIf { it.isAuthFailure() || it.code == 429 }
 
     private suspend fun postTorrentAction(
         endpoint: String,

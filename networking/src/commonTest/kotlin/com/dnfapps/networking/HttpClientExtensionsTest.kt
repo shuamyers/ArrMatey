@@ -5,6 +5,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
@@ -62,6 +63,30 @@ class HttpClientExtensionsTest {
 
         assertTrue(result is NetworkResult.Error, "Expected Error but got $result")
         assertEquals(404, result.code)
+    }
+
+    @Test
+    fun rateLimitRetainsRetryAfterThroughResultMapping() = runTest {
+        val client = HttpClient(
+            MockEngine {
+                respond(
+                    content = "Rate limited",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(HttpHeaders.RetryAfter, "3600"),
+                )
+            },
+        ) {
+            expectSuccess = true
+        }
+
+        val result = client.safeGet<List<TestModel>>("http://test.com")
+            .filterValues { it.id == 1 }
+            .mapValues { it.id }
+            .map { it.firstOrNull() }
+
+        assertTrue(result is NetworkResult.Error)
+        assertEquals(429, result.code)
+        assertEquals("3600", result.retryAfter)
     }
 
     @Serializable
