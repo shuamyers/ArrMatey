@@ -10,6 +10,7 @@ import com.dnfapps.arrmatey.instances.model.SeerrAuthType
 import com.dnfapps.arrmatey.mediaserver.model.MediaServerIntegration
 import com.dnfapps.arrmatey.utils.getNetworkUtils
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
@@ -33,7 +34,14 @@ fun createInstanceClient(
     instance: Instance?,
     json: Json,
     customLogger: Logger,
-) = HttpClient {
+) = HttpClient { configureInstanceClient(instance, json, customLogger) }
+
+/** Instance client setup, split out so tests can apply it to a mock engine. */
+internal fun HttpClientConfig<*>.configureInstanceClient(
+    instance: Instance?,
+    json: Json,
+    customLogger: Logger,
+) {
     expectSuccess = true
     install(ContentNegotiation) {
         json(json)
@@ -62,8 +70,16 @@ fun createInstanceClient(
         level = (customLogger as? DynamicLogger)?.level ?: LogLevel.HEADERS
     }
 
+    val usesSeerrSession = instance?.type == InstanceType.Seerr && instance.seerrAuthType != SeerrAuthType.ApiKey
+
     install(HttpCookies) {
-        storage = AcceptAllCookiesStorage()
+        // The Seerr session comes from the cookie storage, not a hand-set Cookie header (see
+        // SeerrSessionCookiesStorage: concurrent calls lost that header and got 401).
+        storage = if (usesSeerrSession) {
+            SeerrSessionCookiesStorage(instance?.sessionToken?.value.orEmpty())
+        } else {
+            AcceptAllCookiesStorage()
+        }
     }
 
     defaultRequest {
@@ -74,10 +90,8 @@ fun createInstanceClient(
         }
 
         instance?.let { instance ->
-            if (instance.type == InstanceType.Seerr && instance.seerrAuthType != SeerrAuthType.ApiKey) {
-                if (instance.sessionToken.value.isNotEmpty()) {
-                    header(HttpHeaders.Cookie, "connect.sid=${instance.sessionToken.value}")
-                }
+            if (usesSeerrSession) {
+                // Session cookie is supplied by SeerrSessionCookiesStorage.
             } else if (!instance.noApiKeyRequired && instance.apiKey.value.isNotEmpty()) {
                 when (instance.type) {
                     InstanceType.Tracearr ->
