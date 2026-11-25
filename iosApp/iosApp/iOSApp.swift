@@ -10,6 +10,7 @@ struct iOSApp: App {
 
     init() {
         KoinHelperKt.doInitKoin()
+        ArrmadaSeed.runIfNeeded()
         LoggingHelperKt.doInitLogging()
         NetworkUtilsKt.initializeNetworkUtils()
         IOSCrashManager.shared.initialize()

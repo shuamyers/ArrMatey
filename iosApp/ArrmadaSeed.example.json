@@ -1,0 +1,9 @@
+{
+  "instances": [
+    { "type": "Sonarr", "label": "Sonarr", "url": "http://sonarr.example.lan" },
+    { "type": "Radarr", "label": "Radarr", "url": "http://radarr.example.lan" }
+  ],
+  "downloadClients": [
+    { "type": "SABnzbd", "label": "SABnzbd", "url": "http://sabnzbd.example.lan" }
+  ]
+}

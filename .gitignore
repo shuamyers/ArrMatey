@@ -134,3 +134,5 @@ skills-lock.json
 
 # Arrmada: personal signing identity
 iosApp/Configuration/Local.xcconfig
+# Arrmada: private list of household services, bundled into personal builds only
+iosApp/iosApp/Arrmada/ArrmadaSeed.json
